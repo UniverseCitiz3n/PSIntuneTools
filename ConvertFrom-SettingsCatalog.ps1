@@ -35,6 +35,8 @@ if ($($Profiles | Get-Member).Name -contains '@odata.nextLink') {
 			$ListOfProfiles += $Profiles
 		}
 		$ListOfProfiles
+	}else{
+		$ListOfProfiles = $Profiles
 	}
 } catch {
         $ex = $_.Exception
@@ -62,4 +64,16 @@ if (-not($null -eq $ProfileId)) {
 }
 Write-Host "Found $($($Profiles | Measure-Object).count) profiles"
 
+$ProfilesBody = foreach ($Profile in $Profiles) {
+	$Body = Invoke-RestMethod -UseBasicParsing -Uri "$GraphUrl/$graphApiVersion/deviceManagement/configurationPolicies('$($Profile.id)')/settings?`$expand=settingDefinitions&top=1000" -Headers $AuthToken -ContentType 'application/json'
+	$Settings = foreach ($item in $Body.value) {
+			@{'@odata.type' = '#microsoft.graph.deviceManagementConfigurationSetting'; 'settingInstance' = $item.settingInstance; 'settingDefinitions' = $item.settingDefinitions }
+	}
+	Add-Member -InputObject $Profile -Name 'settings' -Value @($Settings) -MemberType NoteProperty -Force
+	if ($ExpandAssignments) {
+		$Assignments = Invoke-RestMethod -UseBasicParsing -Uri "$GraphUrl/$graphApiVersion/deviceManagement/configurationPolicies('$($Profile.id)')/assignments" -Headers $AuthToken -ContentType 'application/json'
+		Add-Member -InputObject $Profile -Name 'assignments' -Value @($Assignments.value) -MemberType NoteProperty -Force
+	}
+	$Profile
+}
 }
